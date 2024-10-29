@@ -29,10 +29,10 @@ class RegistrationModal(Modal, title="register for eurocore"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        username = self.username.value
-        password = self.password.value
+        username = self.username.value.strip()
+        password = self.password.value.strip()
 
-        async with self.bot.client.post(url="https://api.europeia.dev/register", json=[username, password]) as response:
+        async with self.bot.client.post(url="https://api.europeia.dev/register", json={"username": username, "password": password}) as response:
             data = await response.json(encoding="UTF-8")
 
             user = self.bot.user_list.add_user(User(name=username, password=password))
@@ -42,7 +42,7 @@ class RegistrationModal(Modal, title="register for eurocore"):
 
             await interaction.response.send_message(f"registration successful, welcome, {user.name}!", ephemeral=True)
 
-    async def on_error(self, interaction: Interaction[ClientT], error: Exception, /) -> None:
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         self.bot.logger.error(f"registration error ({type(error)}): {error}")
 
         await interaction.response.send_message(f"registration failed: {error}, please try again", ephemeral=True)
@@ -68,10 +68,10 @@ class LoginModal(Modal, title="login to eurocore"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        username = self.username.value
-        password = self.password.value
+        username = self.username.value.strip()
+        password = self.password.value.strip()
 
-        async with self.bot.client.post(url="https://api.europeia.dev/login", json=[username, password]) as response:
+        async with self.bot.client.post(url="https://api.europeia.dev/login", json={"username": username, "password": password}) as response:
             data = await response.json(encoding="UTF-8")
 
             user = self.bot.user_list.add_user(User(name=username, password=password))
@@ -81,6 +81,11 @@ class LoginModal(Modal, title="login to eurocore"):
 
             await interaction.response.send_message(f"login successful, welcome back, {user.name}!", ephemeral=True)
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        self.bot.logger.error(f"login error ({type(error)}): {error}")
+
+        await interaction.response.send_message(f"login failed: {error}, please try again", ephemeral=True)
+
 class Eurocore(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -88,6 +93,10 @@ class Eurocore(commands.Cog):
     @app_commands.command(name="register", description="register for eurocore")
     async def register(self, interaction: discord.Interaction):
         await interaction.response.send_modal(RegistrationModal(self.bot))
+
+    @app_commands.command(name="login", description="login to eurocore")
+    async def login(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(LoginModal(self.bot))
 
 
 async def setup(bot: Bot):
