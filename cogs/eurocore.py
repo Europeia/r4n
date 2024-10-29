@@ -1,6 +1,6 @@
 import discord
 
-from discord import app_commands, Interaction
+from discord import app_commands
 from discord.ext import commands
 from discord.ui import Modal, View
 
@@ -40,12 +40,12 @@ class RegistrationModal(Modal, title="register for eurocore"):
 
             self.bot.logger.info(f"registered user: {user.name}")
 
-            await interaction.response.send_message(f"registration successful, welcome, {user.name}!", ephemeral=True)
+            await interaction.response().send_message(f"registration successful, welcome, {user.name}!", ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         self.bot.logger.error(f"registration error ({type(error)}): {error}")
 
-        await interaction.response.send_message(f"registration failed: {error}, please try again", ephemeral=True)
+        await interaction.response().send_message(f"registration failed: {error}, please try again", ephemeral=True)
 
 class LoginModal(Modal, title="login to eurocore"):
     def __init__(self, bot: Bot):
@@ -79,12 +79,12 @@ class LoginModal(Modal, title="login to eurocore"):
 
             self.bot.logger.info(f"logged in user: {user.name}")
 
-            await interaction.response.send_message(f"login successful, welcome back, {user.name}!", ephemeral=True)
+            await interaction.response().send_message(f"login successful, welcome back, {user.name}!", ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         self.bot.logger.error(f"login error ({type(error)}): {error}")
 
-        await interaction.response.send_message(f"login failed: {error}, please try again", ephemeral=True)
+        await interaction.response().send_message(f"login failed: {error}, please try again", ephemeral=True)
 
 class Eurocore(commands.Cog):
     def __init__(self, bot: Bot):
@@ -92,11 +92,11 @@ class Eurocore(commands.Cog):
 
     @app_commands.command(name="register", description="register for eurocore")
     async def register(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(RegistrationModal(self.bot))
+        await interaction.response().send_modal(RegistrationModal(self.bot))
 
     @app_commands.command(name="login", description="login to eurocore")
     async def login(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(LoginModal(self.bot))
+        await interaction.response().send_modal(LoginModal(self.bot))
 
 
 async def setup(bot: Bot):
