@@ -1,0 +1,21 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Log in to GHCR
+      uses: docker/login-action@v2
+      with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN }}
+    - name: Build and push Docker image
+      run: |
+          docker build . -t ghcr.io/${{ github.actor }}/r4n:latest
+          docker push ghcr.io/${{ github.actor }}/r4n:latest

@@ -15,7 +15,6 @@ class Bot(commands.Bot):
     _client: aiohttp.ClientSession
     _config: Config
     _logger: logging.Logger
-    _pool: asyncpg.pool.Pool
     _users: UserList
 
     @property
