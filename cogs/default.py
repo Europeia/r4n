@@ -1,5 +1,3 @@
-import discord
-
 from discord.ext import commands
 
 from components.bot import Bot

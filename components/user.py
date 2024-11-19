@@ -3,16 +3,18 @@ from typing import Optional
 
 
 class User:
+    id: int
     name: str
     password: str
     token: Optional[str]
-    last_login: Optional[datetime]
+    last_login: datetime
 
-    def __init__(self, name: str, password: str):
+    def __init__(self, id: int, name: str, password: str, token: Optional[str] = None):
+        self.id = id
         self.name = name
         self.password = password
-        self.token = None
-        self.last_login = None
+        self.token = token
+        self.last_login = datetime.now()
 
     def __repr__(self):
         return f"User(name={self.name}, last_login={self.last_login})"
@@ -25,36 +27,31 @@ class User:
 
 
 class UserList:
-    users: list[User]
+    users: dict[int, User]
 
     def __init__(self):
-        self.users = []
+        self.users = {}
 
     def __repr__(self):
-        return f"UserList(users={' '.join([user.name for user in self.users])})"
+        return f"UserList(users={' '.join([user.name for user in self.users.values()])})"
 
     def __iter__(self):
         return iter(self.users)
 
-    def _get(self, name: str) -> User:
-        for user in self.users:
-            if user.name == name:
-                return user
+    def __len__(self):
+        return len(self.users)
 
-    def add_user(self, user: User) -> User:
-        if user not in self.users:
-            self.users.append(user)
+    def __getitem__(self, index: int) -> User:
+        return self.users[index]
 
-        return self._get(user.name)
+    def __setitem__(self, index: int, user: User):
+        self.users[index] = user
 
-    def get_user(self, name: str) -> Optional[User]:
-        for user in self.users:
-            if user.name == name:
-                return user
-        return None
+    def __contains__(self, discord_id: int) -> bool:
+        return discord_id in self.users
 
-    def remove_user(self, name: str):
-        for user in self.users:
-            if user.name == name:
-                self.users.remove(user)
-                return
+    def add_user(self, discord_id: int, user: User) -> User:
+        self.users[discord_id] = user
+
+        return self.users[discord_id]
+

@@ -17,7 +17,10 @@ class ErrorHandler(commands.Cog):
 
     @staticmethod
     async def on_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
-        await interaction.response.send_message(f"An error occurred: {error}", ephemeral=True)
+        if interaction.response.is_done(): # noqa
+            await interaction.followup.send(f"An error occurred: {error}", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"An error occurred: {error}", ephemeral=True) # noqa
 
 
 async def setup(bot: Bot):
