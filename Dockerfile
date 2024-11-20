@@ -1,4 +1,4 @@
-FROM python:3.12-bullseye
+FROM python:3.12-slim
 LABEL org.opencontainers.image.source="https://github.com/nsupc/r4n"
 
 WORKDIR /app
