@@ -1,0 +1,28 @@
+alerts:
+- rule: DEPLOYMENT_FAILED
+- rule: DOMAIN_FAILED
+features:
+- buildpack-stack=ubuntu-22
+ingress: {}
+name: clownfish-app
+region: nyc
+workers:
+- envs:
+  - key: USER
+    scope: RUN_AND_BUILD_TIME
+    value: GK
+  - key: EUROCORE_URL
+    scope: RUN_AND_BUILD_TIME
+    value: https://api.europeia.dev
+  - key: DISCORD_TOKEN
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:Q5DBLW9M4CRqvkbsRuDUQ306sUFfoMQ+:Sg0GseLdYQ0GYlCbOl2Zw21/teAWVanX4kVrdTyNE9bOampmLmmQlQpulzUhEoVu9cYw3NHcrMeNf6tabXpXfTM20oJDnYmRQcY5mtP2rH3s5bMjWZLZWQ==]
+  image:
+    registry: nsupc
+    registry_type: GHCR
+    repository: r4n
+    tag: latest
+  instance_count: 1
+  instance_size_slug: apps-s-1vcpu-0.5gb
+  name: nsupc-r-4-n
