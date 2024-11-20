@@ -4,7 +4,7 @@ alerts:
 features:
 - buildpack-stack=ubuntu-22
 ingress: {}
-name: clownfish-app
+name: seal-app
 region: nyc
 workers:
 - envs:
@@ -17,7 +17,7 @@ workers:
   - key: DISCORD_TOKEN
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:Q5DBLW9M4CRqvkbsRuDUQ306sUFfoMQ+:Sg0GseLdYQ0GYlCbOl2Zw21/teAWVanX4kVrdTyNE9bOampmLmmQlQpulzUhEoVu9cYw3NHcrMeNf6tabXpXfTM20oJDnYmRQcY5mtP2rH3s5bMjWZLZWQ==]
+    value: EV[1:M3QRru3wTwPDu59pGO1hoU/KdbWlTmHq:c9Uy+IQk3adGtArLmNu0u5DFfAkAnOUn2cRrCcYRsON3HKqa+keee59DDd18rwuNFFyXVN2Gk9msLJMKZhI0nxo+gwCwl5x5LehKrWi4VrIsN8GwRmYL3Q==]
   image:
     registry: nsupc
     registry_type: GHCR
@@ -25,4 +25,4 @@ workers:
     tag: latest
   instance_count: 1
   instance_size_slug: apps-s-1vcpu-0.5gb
-  name: nsupc-r-4-n
+  name: r4n
