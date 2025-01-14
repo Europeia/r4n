@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-LABEL org.opencontainers.image.source="https://github.com/nsupc/r4n"
+LABEL org.opencontainers.image.source="https://github.com/europeia/r4n"
 
 WORKDIR /app
 
