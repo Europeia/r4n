@@ -25,7 +25,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: ghcr.io/${{ github.repository }}:latest
+        tags: ghcr.io/europeia/r4n:latest
     - name: Push to DO
       uses: digitalocean/app_action/deploy@v2
       env:
