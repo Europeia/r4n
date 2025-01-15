@@ -19,7 +19,7 @@ workers:
     type: SECRET
     value: EV[1:M3QRru3wTwPDu59pGO1hoU/KdbWlTmHq:c9Uy+IQk3adGtArLmNu0u5DFfAkAnOUn2cRrCcYRsON3HKqa+keee59DDd18rwuNFFyXVN2Gk9msLJMKZhI0nxo+gwCwl5x5LehKrWi4VrIsN8GwRmYL3Q==]
   image:
-    registry: nsupc
+    registry: europeia
     registry_type: GHCR
     repository: r4n
     tag: latest
