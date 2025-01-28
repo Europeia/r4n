@@ -4,7 +4,7 @@ import os
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord.ext import commands, tasks
 from discord.ui import Modal, View
 from typing import Optional, Dict, Literal, Final
@@ -178,6 +178,92 @@ class LoginModal(Modal, title="login to eurocore"):
         self.bot.logger.error(f"login error ({type(error)}): {error}")
 
         await interaction.response.send_message(f"login failed: {error}, please try again", ephemeral=True) # noqa
+
+
+class ChangePasswordModal(Modal, title="change your password"):
+    def __init__(self, bot: Bot, user: User):
+        super().__init__()
+
+        self.bot = bot
+        self.user = user
+
+    password = discord.ui.TextInput(
+        label="new password",
+        min_length=8,
+        max_length=40,
+        required=True
+    )
+
+    async def on_submit(self, interaction: Interaction, /) -> None:
+        headers = {
+            "Authorization": f"Bearer {self.user.token}"
+        }
+
+        data = {
+            "new_password": self.password.value
+        }
+
+        async with self.bot.client.request(
+                "PATCH",
+                url=f"{self.bot.config.eurocore_url}/users/me/password",
+                headers=headers,
+                json=data
+        ) as response:
+            if response.status != 200:
+                raise commands.UserInputError(await response.text())
+            else:
+                await interaction.response.send_message("password changed", ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        self.bot.logger.error(f"password reset error ({type(error)}): {error}")
+
+        await interaction.response.send_message(f"password reset error: {error}, please try again", ephemeral=True)
+
+class ChangeUserPasswordModal(Modal, title="[ADMIN] change a user's password"):
+    def __init__(self, bot: Bot, user: User):
+        super().__init__()
+
+        self.bot = bot
+        self.user = user
+
+    username = discord.ui.TextInput(
+        label="username",
+        min_length=3,
+        max_length=20,
+        required=True
+    )
+
+    password = discord.ui.TextInput(
+        label="new password",
+        min_length=8,
+        max_length=40,
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        async with self.bot.client.request("GET", url=f"{self.bot.config.eurocore_url}/users/username/{self.username.value}") as response:
+            response_data = await response.json(encoding="UTF-8")
+
+        headers = {
+            "Authorization": f"Bearer {self.user.token}"
+        }
+
+        data = {
+            "new_password": self.password.value
+        }
+
+        user_id = int(response_data["id"])
+
+        async with self.bot.client.request("PATCH", f"{self.bot.config.eurocore_url}/users/{user_id}/password", headers=headers, json=data) as response:
+            if response.status != 200:
+                raise commands.UserInputError("user not found")
+            else:
+                await interaction.response.send_message(f"user: {self.username.value}'s password changed", ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        self.bot.logger.error(f"password reset error ({type(error)}): {error}")
+
+        await interaction.response.send_message(f"password reset error: {error}, please try again", ephemeral=True)
 
 
 class Eurocore(commands.Cog):
@@ -414,6 +500,28 @@ class Eurocore(commands.Cog):
         }
 
         await self.execute(interaction, job_type="rmbpost", method="POST", resource="/rmbposts", data=data, ping=ping)
+
+    user_command_group = app_commands.Group(name="user", description="eurocore user commands")
+
+    @user_command_group.command(name="change_password", description="change your own password")
+    async def change_password(self, interaction: discord.Interaction):
+        user = await self.get_user(interaction)
+
+        if interaction.response.is_done():
+            raise commands.UserInputError("Discord doesn't allow modal chaining, please rerun the command.")
+
+        await interaction.response.send_modal(ChangePasswordModal(self.bot, user))
+
+    admin_command_group = app_commands.Group(name="admin", description="eurocore admin commands")
+
+    @admin_command_group.command(name="change_password", description="change a user's password")
+    async def change_user_password(self, interaction: discord.Interaction):
+        user = await self.get_user(interaction)
+
+        if interaction.response.is_done():
+            raise commands.UserInputError("Discord doesn't allow modal chaining, please rerun the command.")
+
+        await interaction.response.send_modal(ChangeUserPasswordModal(self.bot, user))
 
 async def setup(bot: Bot):
     await bot.add_cog(Eurocore(bot))
