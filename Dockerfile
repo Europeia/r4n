@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:alpine
+FROM ghcr.io/astral-sh/uv:python3.12-alpine
 LABEL org.opencontainers.image.source="https://github.com/europeia/r4n"
 
 ADD . ./app
