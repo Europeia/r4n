@@ -1,12 +1,10 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:alpine
 LABEL org.opencontainers.image.source="https://github.com/europeia/r4n"
+
+ADD . ./app
 
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
+RUN uv sync --frozen
 
-RUN pip install -r requirements.txt
-
-COPY . .
-
-CMD ["python", "main.py"]
+CMD ["uv", "run", "main.py"]
