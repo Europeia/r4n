@@ -1,6 +1,7 @@
 import discord
 import requests
 import os
+import re
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -39,6 +40,7 @@ class Job:
     error: Optional[str]
     ping_on_completion: bool
     message: Optional[discord.Message]
+    error_regex: re.Pattern
 
     def __init__(
         self,
@@ -66,6 +68,7 @@ class Job:
         self.message = None
         self.dispatch = dispatch
         self.rmbpost = rmbpost
+        self.error_regex = re.compile(g)
 
     def __repr__(self):
         return f"Job(id={self.id}, status={self.status})"
@@ -125,7 +128,7 @@ class Job:
                 self.dispatch.id = response_data["dispatch_id"]
             elif self.type == "rmbpost":
                 self.rmbpost.id = response_data["rmbpost_id"]
-            self.error = response_data["error"]
+            self.error = self.error_regex.match(response_data["error"]).group(1)
 
             await self.message.edit(embed=self.embed())
 
