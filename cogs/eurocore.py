@@ -68,7 +68,7 @@ class Job:
         self.message = None
         self.dispatch = dispatch
         self.rmbpost = rmbpost
-        self.error_regex = re.compile(g)
+        self.error_regex = re.compile(r"(.+)</p>")
 
     def __repr__(self):
         return f"Job(id={self.id}, status={self.status})"
