@@ -120,6 +120,10 @@ class Job:
         ) as response:
             response_data = await response.json(encoding="UTF-8")
 
+            error = self.error_regex.match(response_data["error"])
+            if error:
+                self.error = error.group(1)
+
             self.status = response_data["status"]
             self.modified_at = datetime.strptime(
                 response_data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -128,7 +132,6 @@ class Job:
                 self.dispatch.id = response_data["dispatch_id"]
             elif self.type == "rmbpost":
                 self.rmbpost.id = response_data["rmbpost_id"]
-            self.error = self.error_regex.match(response_data["error"]).group(1)
 
             await self.message.edit(embed=self.embed())
 
