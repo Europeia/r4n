@@ -42,17 +42,17 @@ class Bot(commands.Bot):
         self._users = UserList()
 
     async def on_ready(self):
-        self._logger.info(f"logged in as {self.user}")
+        logger.info(f"logged in as {self.user}")
 
     async def setup_hook(self):
         default_cogs = ["default", "eurocore", "error_handler"]
 
         for cog in default_cogs:
-            self._logger.info(f"loading cog: {cog}")
+            logger.info(f"loading cog: {cog}")
             try:
                 await self.load_extension(f"cogs.{cog}")
-            except Exception as e:
-                self._logger.error(e)
+            except Exception:
+                logger.exception("failed to load cog: %s", cog)
                 sys.exit(1)
 
     async def register(self, discord_id: int, username: str, password: str) -> User:
