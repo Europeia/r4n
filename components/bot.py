@@ -7,14 +7,14 @@ from datetime import datetime
 from discord.ext import commands
 
 from components.config import Config
-from components.logger import get_logger
 from components.user import User, UserList
+
+logger = logging.getLogger("r4n")
 
 
 class Bot(commands.Bot):
     _client: aiohttp.ClientSession
     _config: Config
-    _logger: logging.Logger
     _users: UserList
 
     @property
@@ -28,11 +28,6 @@ class Bot(commands.Bot):
         return self._config
 
     @property
-    def logger(self):
-        """`logging.Logger`"""
-        return self._logger
-
-    @property
     def user_list(self):
         """`UserList`"""
         return self._users
@@ -44,7 +39,6 @@ class Bot(commands.Bot):
 
         self._client = client
         self._config = config
-        self._logger = get_logger()
         self._users = UserList()
 
     async def on_ready(self):

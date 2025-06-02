@@ -1,6 +1,10 @@
+import logging
 from discord.ext import commands
 
 from components.bot import Bot
+
+logger = logging.getLogger("r4n")
+
 
 def is_authorized():
     def predicate(ctx: commands.Context):
@@ -11,6 +15,7 @@ def is_authorized():
 
     return commands.check(predicate)
 
+
 class Default(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -20,7 +25,7 @@ class Default(commands.Cog):
     async def sync(self, ctx: commands.Context):
         await ctx.defer()
 
-        self.bot.logger.info("Syncing slash commands")
+        logger.info("Syncing slash commands")
         await self.bot.tree.sync()
         await ctx.reply("Done!")
 
@@ -35,6 +40,7 @@ class Default(commands.Cog):
     async def kill(self, ctx: commands.Context):
         await ctx.reply("Goodbye!")
         await self.bot.close()
+
 
 async def setup(bot: Bot):
     await bot.add_cog(Default(bot))
