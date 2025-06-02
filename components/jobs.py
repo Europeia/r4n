@@ -49,6 +49,9 @@ class Job:
     def embed(self) -> discord.Embed:
         pass
 
+    def set_message(self, message: discord.Message):
+        self._message = message
+
     @property
     def error(self) -> Optional[str]:
         return self._error
