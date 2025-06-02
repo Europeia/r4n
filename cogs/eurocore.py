@@ -188,11 +188,11 @@ class Eurocore(commands.Cog):
 
         self.jobs: Dict[str, Job] = {}
 
-    def cog_load(self):
+    async def cog_load(self):
         logger.info("loading eurocore, starting jobs task")
         self.poll_jobs.start()
 
-    def cog_unload(self):
+    async def cog_unload(self):
         logger.info("unloading eurocore, stopping jobs task")
         self.poll_jobs.stop()
 
@@ -206,14 +206,14 @@ class Eurocore(commands.Cog):
             except:  # noqa: E722
                 logger.exception("unable to update job")
 
-            if job.status != "queued":
-                if job.ping_on_completion:
-                    await job.message.reply(f"<@!{job.user.id}>")
+            if job._status != "queued":
+                if job._ping_on_completion:
+                    await job._message.reply(f"<@!{job._user.id}>")
 
         self.jobs = {
             message_id: job
             for message_id, job in self.jobs.items()
-            if job.status == "queued"
+            if job._status == "queued"
         }
 
     @poll_jobs.before_loop
@@ -471,7 +471,7 @@ class Eurocore(commands.Cog):
     @app_commands.choices(
         nation=[
             app_commands.Choice(name=val.replace("_", " ").title(), value=val)
-            for val in requests.options(f"{os.getenv('EUROCORE_URL')}/rmbposts")
+            for val in requests.head(f"{os.getenv('EUROCORE_URL')}/rmbposts")
             .headers["rmbpost-nations"]
             .split(",")
         ]

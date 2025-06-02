@@ -3,8 +3,8 @@ import discord
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from user import User
-from bot import Bot
+from .user import User
+from .bot import Bot
 
 Action = Literal["add", "edit", "remove"]
 Status = Literal["queued", "success", "failure"]
@@ -45,6 +45,9 @@ class Job:
 
     def __repr__(self):
         return f"Job(id={self._id}, status={self._status})"
+
+    async def update(self, bot: Bot):
+        pass
 
     def embed(self) -> discord.Embed:
         pass
@@ -132,7 +135,7 @@ class Dispatch(Job):
 
     async def update(self, bot: Bot):
         async with bot.client.get(
-            url=f"{bot.config.eurocore_url}{self.location}"
+            url=f"{bot.config.eurocore_url}{self._location}"
         ) as response:
             data = await response.json(encoding="UTF-8")
 
@@ -181,7 +184,7 @@ class RMBPost(Job):
 
     def embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title=f"RMBPost {self._job_id}: {self.status.title()}",
+            title=f"RMBPost {self._job_id}: {self._status.title()}",
             color=discord.Color.blurple(),
         )
 
@@ -212,7 +215,7 @@ class RMBPost(Job):
 
     async def update(self, bot: Bot):
         async with bot.client.get(
-            url=f"{bot.config.eurocore_url}{self.location}"
+            url=f"{bot.config.eurocore_url}{self._location}"
         ) as response:
             data = await response.json(encoding="UTF-8")
 
