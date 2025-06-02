@@ -3,7 +3,6 @@ import logging
 import requests
 import os
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from discord import app_commands, Interaction
 from discord.ext import commands, tasks
