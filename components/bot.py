@@ -46,12 +46,12 @@ class Bot(commands.Bot):
         self._config = config
         self._logger = get_logger()
         self._users = UserList()
-        
+
     async def on_ready(self):
         self._logger.info(f"logged in as {self.user}")
 
     async def setup_hook(self):
-        default_cogs = ['default', "eurocore", "error_handler"]
+        default_cogs = ["default", "eurocore", "error_handler"]
 
         for cog in default_cogs:
             self._logger.info(f"loading cog: {cog}")
@@ -62,26 +62,28 @@ class Bot(commands.Bot):
                 sys.exit(1)
 
     async def register(self, discord_id: int, username: str, password: str) -> User:
-        async with self._client.post(url=f"{self._config.eurocore_url}/register", json={"username": username, "password": password}) as response:
+        async with self._client.post(
+            url=f"{self._config.eurocore_url}/register",
+            json={"username": username, "password": password},
+        ) as response:
             data = await response.json(encoding="UTF-8")
 
             user = self._users.add_user(
                 discord_id=discord_id,
                 user=User(
-                    id=discord_id,
-                    name=username,
-                    password=password,
-                    token=data["token"]
-                )
+                    id=discord_id, name=username, password=password, token=data["token"]
+                ),
             )
 
             user.last_login = datetime.now()
 
             return user
 
-
     async def sign_in(self, user: User):
-        async with self._client.post(url=f"{self._config.eurocore_url}/login", json={"username": user.name, "password": user.password}) as response:
+        async with self._client.post(
+            url=f"{self._config.eurocore_url}/login",
+            json={"username": user.name, "password": user.password},
+        ) as response:
             data = await response.json(encoding="UTF-8")
 
             user.token = data["token"]

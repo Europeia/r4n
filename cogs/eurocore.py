@@ -1,139 +1,20 @@
 import discord
+import logging
 import requests
 import os
-import re
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from discord import app_commands, Interaction
 from discord.ext import commands, tasks
-from discord.ui import Modal, View
-from typing import Optional, Dict, Literal, Final
+from discord.ui import Modal
+from typing import Optional, Dict
 
 from components.bot import Bot
 from components.user import User
+from components.jobs import Job, Dispatch, RMBPost
 
-JOB_TYPE = Final[Literal["dispatch", "rmbpost"]]
-
-
-@dataclass
-class Dispatch:
-    id: Optional[int]
-    action: Literal["add", "edit", "remove"]
-
-
-@dataclass
-class RMBPost:
-    id: Optional[int]
-
-
-class Job:
-    id: str
-    user: User
-    location: str
-    type: JOB_TYPE
-    dispatch: Optional[Dispatch]
-    rmbpost: Optional[RMBPost]
-    created_at: datetime
-    modified_at: datetime
-    status: Literal["queued", "success", "failure"]
-    error: Optional[str]
-    ping_on_completion: bool
-    message: Optional[discord.Message]
-    error_regex: re.Pattern
-
-    def __init__(
-        self,
-        job_id: int,
-        user: User,
-        location: str,
-        job_type: JOB_TYPE,
-        created_at: datetime,
-        modified_at: datetime,
-        status: Literal["queued", "success", "failure"],
-        ping_on_completion: bool = False,
-        error: Optional[str] = None,
-        dispatch: Optional[Dispatch] = None,
-        rmbpost: Optional[RMBPost] = None,
-    ):
-        self.id = f"{job_type}-{job_id}"
-        self.user = user
-        self.location = location
-        self.type = job_type
-        self.created_at = created_at
-        self.modified_at = modified_at
-        self.status = status
-        self.error = error
-        self.ping_on_completion = ping_on_completion
-        self.message = None
-        self.dispatch = dispatch
-        self.rmbpost = rmbpost
-        self.error_regex = re.compile(r"(.+)</p>")
-
-    def __repr__(self):
-        return f"Job(id={self.id}, status={self.status})"
-
-    def set_message(self, message: discord.Message):
-        self.message = message
-
-    def embed(self) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"Job {self.id}: {self.status.title()}", color=discord.Color.blurple()
-        )
-        embed.add_field(name="Job ID", value=self.id, inline=True)
-        if self.dispatch:
-            embed.add_field(name="Action", value=self.dispatch.action, inline=True)
-        embed.add_field(name="Status", value=self.status, inline=True)
-        embed.add_field(name="", value="", inline=False)
-        embed.add_field(
-            name="Job Created",
-            value=f"<t:{int(self.created_at.timestamp())}>",
-            inline=True,
-        )
-        embed.add_field(
-            name="Job Modified",
-            value=f"<t:{int(self.modified_at.timestamp())}:R>",
-            inline=True,
-        )
-        if self.dispatch and self.dispatch.action != "remove":
-            if self.dispatch.id:
-                embed.add_field(
-                    name="View Dispatch",
-                    value=f"https://www.nationstates.net/page=dispatch/id={self.dispatch.id}",
-                    inline=False,
-                )
-        if self.rmbpost:
-            if self.rmbpost.id:
-                embed.add_field(
-                    name="View RMB Post",
-                    value=f"https://www.nationstates.net/page=rmb/postid={self.rmbpost.id}",
-                    inline=False,
-                )
-        embed.add_field(name="Error", value=f"```{self.error}```", inline=False)
-        embed.set_footer(text=f"Initiated by {self.user.name}")
-
-        return embed
-
-    async def update(self, bot: Bot):
-        async with bot.client.get(
-            url=f"{bot.config.eurocore_url}{self.location}"
-        ) as response:
-            response_data = await response.json(encoding="UTF-8")
-
-            error = self.error_regex.match(response_data["error"])
-            if error:
-                self.error = error.group(1)
-
-            self.status = response_data["status"]
-            self.modified_at = datetime.strptime(
-                response_data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
-            ).replace(tzinfo=timezone.utc)
-            if self.type == "dispatch":
-                self.dispatch.id = response_data["dispatch_id"]
-            elif self.type == "rmbpost":
-                self.rmbpost.id = response_data["rmbpost_id"]
-
-            await self.message.edit(embed=self.embed())
+logger = logging.getLogger("r4n")
 
 
 class RegistrationModal(Modal, title="register for eurocore"):
@@ -156,20 +37,20 @@ class RegistrationModal(Modal, title="register for eurocore"):
 
         user = await self.bot.register(interaction.user.id, username, password)
 
-        self.bot.logger.info(f"registered user: {user.name}")
+        logger.info(f"registered user: {user.name}")
 
         await interaction.response.send_message(
             f"registration successful, welcome, {user.name}!", ephemeral=True
-        )  # noqa
+        )
 
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
-        self.bot.logger.error(f"registration error ({type(error)}): {error}")
+        logger.error(f"registration error ({type(error)}): {error}")
 
         await interaction.response.send_message(
             f"registration failed: {error}, please try again", ephemeral=True
-        )  # noqa
+        )
 
 
 class LoginModal(Modal, title="login to eurocore"):
@@ -196,20 +77,20 @@ class LoginModal(Modal, title="login to eurocore"):
 
         self.bot.user_list.add_user(interaction.user.id, user)
 
-        self.bot.logger.info(f"logged in user: {user.name}")
+        logger.info(f"logged in user: {user.name}")
 
         await interaction.response.send_message(
             f"login successful, welcome back, {user.name}!", ephemeral=True
-        )  # noqa
+        )
 
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
-        self.bot.logger.error(f"login error ({type(error)}): {error}")
+        logger.error(f"login error ({type(error)}): {error}")
 
         await interaction.response.send_message(
             f"login failed: {error}, please try again", ephemeral=True
-        )  # noqa
+        )
 
 
 class ChangePasswordModal(Modal, title="change your password"):
@@ -244,7 +125,7 @@ class ChangePasswordModal(Modal, title="change your password"):
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
-        self.bot.logger.error(f"password reset error ({type(error)}): {error}")
+        logger.error(f"password reset error ({type(error)}): {error}")
 
         await interaction.response.send_message(
             f"password reset error: {error}, please try again", ephemeral=True
@@ -295,7 +176,7 @@ class ChangeUserPasswordModal(Modal, title="[ADMIN] change a user's password"):
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
     ) -> None:
-        self.bot.logger.error(f"password reset error ({type(error)}): {error}")
+        logger.error(f"password reset error ({type(error)}): {error}")
 
         await interaction.response.send_message(
             f"password reset error: {error}, please try again", ephemeral=True
@@ -309,19 +190,22 @@ class Eurocore(commands.Cog):
         self.jobs: Dict[str, Job] = {}
 
     def cog_load(self):
-        self.bot.logger.info("loading eurocore, starting jobs task")
+        logger.info("loading eurocore, starting jobs task")
         self.poll_jobs.start()
 
     def cog_unload(self):
-        self.bot.logger.info("unloading eurocore, stopping jobs task")
+        logger.info("unloading eurocore, stopping jobs task")
         self.poll_jobs.stop()
 
     @tasks.loop(seconds=10)
     async def poll_jobs(self):
-        self.bot.logger.debug("polling jobs")
+        logger.debug("polling jobs")
 
-        for message_id, job in self.jobs.items():
-            await job.update(self.bot)
+        for job in self.jobs.values():
+            try:
+                await job.update(self.bot)
+            except:  # noqa: E722
+                logger.exception("unable to update job")
 
             if job.status != "queued":
                 if job.ping_on_completion:
@@ -339,14 +223,14 @@ class Eurocore(commands.Cog):
 
     @poll_jobs.error
     async def on_poll_jobs_error(self, error):
-        self.bot.logger.error(f"polling jobs error: {error}")
+        logger.error(f"polling jobs error: {error}")
 
         self.poll_jobs.restart()
 
     async def get_user(self, interaction: discord.Interaction) -> User:
         if interaction.user.id not in self.bot.user_list:
             modal = LoginModal(self.bot)
-            await interaction.response.send_modal(modal)  # noqa
+            await interaction.response.send_modal(modal)
             await modal.wait()
 
         user = self.bot.user_list[interaction.user.id]
@@ -356,10 +240,9 @@ class Eurocore(commands.Cog):
 
         return user
 
-    async def execute(
+    async def dispatch(
         self,
         interaction: discord.Interaction,
-        job_type: JOB_TYPE,
         method: str,
         resource: str,
         data: Optional[dict] = None,
@@ -375,55 +258,86 @@ class Eurocore(commands.Cog):
             headers=headers,
             json=data,
         ) as response:
-            response_data = await response.json(encoding="UTF-8")
+            data = await response.json(encoding="UTF-8")
 
-            dispatch, rmbpost = None, None
-
-            if job_type == "dispatch":
-                dispatch = Dispatch(
-                    id=response_data["dispatch_id"],
-                    action=response_data["action"],
-                )
-            elif job_type == "rmbpost":
-                rmbpost = RMBPost(
-                    id=response_data["rmbpost_id"],
-                )
-
-            job = Job(
-                job_id=response_data["id"],
+            dispatch = Dispatch(
+                job_id=data["id"],
+                action=data["action"],
                 user=user,
-                location=response.headers["Location"],
-                job_type=job_type,
+                location=response.headers["location"],
                 created_at=datetime.strptime(
-                    response_data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                    data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
                 ).replace(tzinfo=timezone.utc),
                 modified_at=datetime.strptime(
-                    response_data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                    data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
                 ).replace(tzinfo=timezone.utc),
-                status=response_data["status"],
+                status=data["status"],
+                error=data["error"],
                 ping_on_completion=ping,
-                error=response_data["error"],
-                dispatch=dispatch,
-                rmbpost=rmbpost,
             )
 
-            if interaction.response.is_done():  # noqa
-                message = await interaction.followup.send(embed=job.embed())
+            if interaction.response.is_done():
+                message = await interaction.followup.send(embed=dispatch.embed())
             else:
-                await interaction.response.send_message(embed=job.embed())  # noqa
+                await interaction.response.send_message(embed=dispatch.embed())
                 message = await interaction.original_response()
 
-            job.set_message(message)
+            dispatch.set_message(message)
 
-            self.jobs[job.id] = job
+            self.jobs[dispatch.id] = dispatch
+
+    async def rmbpost(
+        self,
+        interaction: discord.Interaction,
+        method: str,
+        resource: str,
+        data: Optional[dict] = None,
+        ping: bool = False,
+    ):
+        user = await self.get_user(interaction)
+
+        headers = {"Authorization": f"Bearer {user.token}"}
+
+        async with self.bot.client.request(
+            method,
+            url=f"{self.bot.config.eurocore_url}{resource}",
+            headers=headers,
+            json=data,
+        ) as response:
+            data = await response.json(encoding="UTF-8")
+
+            rmbpost = RMBPost(
+                job_id=data["id"],
+                user=user,
+                location=response.headers["Location"],
+                created_at=datetime.strptime(
+                    data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                ).replace(tzinfo=timezone.utc),
+                modified_at=datetime.strptime(
+                    data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                ).replace(tzinfo=timezone.utc),
+                status=data["status"],
+                error=data["error"],
+                ping_on_completion=ping,
+            )
+
+            if interaction.response.is_done():
+                message = await interaction.followup.send(embed=rmbpost.embed())
+            else:
+                await interaction.response.send_message(embed=rmbpost.embed())
+                message = await interaction.original_response()
+
+            rmbpost.set_message(message)
+
+            self.jobs[rmbpost.id] = rmbpost
 
     @app_commands.command(name="register", description="register for eurocore")
     async def register(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(RegistrationModal(self.bot))  # noqa
+        await interaction.response.send_modal(RegistrationModal(self.bot))
 
     @app_commands.command(name="login", description="login to eurocore")
     async def login(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(LoginModal(self.bot))  # noqa
+        await interaction.response.send_modal(LoginModal(self.bot))
 
     dispatch_command_group = app_commands.Group(
         name="dispatch", description="eurocore dispatch commands"
@@ -434,7 +348,7 @@ class Eurocore(commands.Cog):
         nation=[
             app_commands.Choice(name=val.replace("_", " ").title(), value=val)
             for val in requests.head(f"{os.getenv('EUROCORE_URL')}/dispatches")
-            .headers["allowed-nations"]
+            .headers["dispatch-nations"]
             .split(",")
         ]
     )
@@ -478,9 +392,8 @@ class Eurocore(commands.Cog):
             "text": text,
         }
 
-        await self.execute(
+        await self.dispatch(
             interaction,
-            job_type="dispatch",
             method="POST",
             resource="/dispatches",
             data=data,
@@ -528,9 +441,8 @@ class Eurocore(commands.Cog):
             "text": text,
         }
 
-        await self.execute(
+        await self.dispatch(
             interaction,
-            job_type="dispatch",
             method="PUT",
             resource=f"/dispatches/{dispatch_id}",
             data=data,
@@ -545,9 +457,8 @@ class Eurocore(commands.Cog):
     async def delete_dispatch(
         self, interaction: discord.Interaction, dispatch_id: int, ping: bool = False
     ):
-        await self.execute(
+        await self.dispatch(
             interaction,
-            job_type="dispatch",
             method="DELETE",
             resource=f"/dispatches/{dispatch_id}",
             ping=ping,
@@ -561,8 +472,8 @@ class Eurocore(commands.Cog):
     @app_commands.choices(
         nation=[
             app_commands.Choice(name=val.replace("_", " ").title(), value=val)
-            for val in requests.head(f"{os.getenv('EUROCORE_URL')}/rmbposts")
-            .headers["allowed-nations"]
+            for val in requests.options(f"{os.getenv('EUROCORE_URL')}/rmbposts")
+            .headers["rmbpost-nations"]
             .split(",")
         ]
     )
@@ -588,9 +499,8 @@ class Eurocore(commands.Cog):
 
         data = {"nation": nation.value, "region": region, "text": text}
 
-        await self.execute(
+        await self.rmbpost(
             interaction,
-            job_type="rmbpost",
             method="POST",
             resource="/rmbposts",
             data=data,
