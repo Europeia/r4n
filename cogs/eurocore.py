@@ -206,14 +206,14 @@ class Eurocore(commands.Cog):
             except:  # noqa: E722
                 logger.exception("unable to update job")
 
-            if job._status != "queued":
-                if job._ping_on_completion:
-                    await job._message.reply(f"<@!{job._user.id}>")
+            if job.status != "queued":
+                if job.ping_on_completion:
+                    await job.message.reply(f"<@!{job._user.id}>")
 
         self.jobs = {
             message_id: job
             for message_id, job in self.jobs.items()
-            if job._status == "queued"
+            if job.status == "queued"
         }
 
     @poll_jobs.before_loop
@@ -258,6 +258,10 @@ class Eurocore(commands.Cog):
             json=data,
         ) as response:
             data = await response.json(encoding="UTF-8")
+
+            if not data:
+                # TODO: make custom error
+                raise commands.CommandError("response is empty")
 
             dispatch = Dispatch(
                 job_id=data["id"],
@@ -304,6 +308,10 @@ class Eurocore(commands.Cog):
             json=data,
         ) as response:
             data = await response.json(encoding="UTF-8")
+
+            if not data:
+                # TODO: make custom error
+                raise commands.CommandError("response is empty")
 
             rmbpost = RMBPost(
                 job_id=data["id"],
@@ -377,7 +385,7 @@ class Eurocore(commands.Cog):
         content: discord.Attachment,
         ping: bool = False,
     ):
-        if not content.content_type.__contains__("text/plain"):
+        if content.content_type and "text/plain" not in content.content_type:
             # TODO: make this a custom error
             raise commands.UserInputError("content_type must be text/plain")
 
@@ -427,7 +435,7 @@ class Eurocore(commands.Cog):
         content: discord.Attachment,
         ping: bool = False,
     ):
-        if not content.content_type.__contains__("text/plain"):
+        if content.content_type and "text/plain" not in content.content_type:
             # TODO: make this a custom error
             raise commands.UserInputError("content_type must be text/plain")
 
@@ -490,7 +498,7 @@ class Eurocore(commands.Cog):
         content: discord.Attachment,
         ping: bool = False,
     ):
-        if not content.content_type.__contains__("text/plain"):
+        if content.content_type and "text/plain" not in content.content_type:
             # TODO: make this a custom error
             raise commands.UserInputError("content_type must be text/plain")
 
