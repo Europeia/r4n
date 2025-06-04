@@ -56,6 +56,22 @@ class Job:
         self._message = message
 
     @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def status(self) -> Status:
+        return self._status
+
+    @property
+    def ping_on_completion(self) -> bool:
+        return self._ping_on_completion
+
+    @property
+    def message(self) -> Optional[discord.Message]:
+        return self._message
+
+    @property
     def error(self) -> Optional[str]:
         return self._error
 
