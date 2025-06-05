@@ -5,12 +5,14 @@ from dataclasses import dataclass
 from logtail import LogtailHandler
 from typing import Literal, Optional
 
+LEVEL = Literal["DEBUG", "INFO", "WARN", "ERROR"]
+
 
 @dataclass
 class Log:
     token: Optional[str] = None
     host: Optional[str] = None
-    level: Literal["DEBUG", "INFO", "WARN", "ERROR"] = "INFO"
+    level: LEVEL = "INFO"
 
 
 class Config:
@@ -33,7 +35,10 @@ class Config:
         host = os.getenv("LOG_HOST")
         level = os.getenv("LOG_LEVEL")
 
-        if level and level.upper() in ["DEBUG", "INFO", "WARN", "ERROR"]:
+        if level:
+            level = level.upper()
+
+        if level and level in ["DEBUG", "INFO", "WARN", "ERROR"]:
             level = level
         else:
             level = "INFO"
