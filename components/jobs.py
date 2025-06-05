@@ -111,6 +111,7 @@ class Dispatch(Job):
             ping_on_completion,
         )
 
+        self._dispatch_id = None
         self._job_id = job_id
         self._action = action
 
@@ -193,6 +194,7 @@ class RMBPost(Job):
             ping_on_completion,
         )
 
+        self._rmbpost_id = None
         self._job_id = job_id
 
     def __repr__(self):
