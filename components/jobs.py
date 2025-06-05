@@ -160,7 +160,7 @@ class Dispatch(Job):
                 self.error = data["error"]
 
             self._status = data["status"]
-            self._modified_at = datetime.strftime(
+            self._modified_at = datetime.strptime(
                 data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
             ).replace(tzinfo=timezone.utc)
             self._dispatch_id = data["dispatch_id"]
@@ -241,7 +241,7 @@ class RMBPost(Job):
                 self.error = data["error"]
 
             self._status = data["status"]
-            self._modified_at = datetime.strftime(
+            self._modified_at = datetime.strptime(
                 data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
             ).replace(tzinfo=timezone.utc)
             self._rmbpost_id = data["rmbpost_id"]
