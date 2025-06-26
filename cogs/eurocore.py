@@ -6,8 +6,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from discord import app_commands, Interaction
 from discord.ext import commands, tasks
-from discord.ui import Modal, Select
-from typing import Optional, Dict, Literal
+from discord.ui import Modal, Select, View
+from typing import Optional, Dict, Literal, Any
 
 from components.bot import Bot
 from components.user import User
@@ -241,7 +241,7 @@ class PermissionSelect(Select):
         self._message = msg
 
 
-class SelectView(discord.ui.View):
+class SelectView(View):
     def __init__(
         self, bot: Bot, user: User, user_id: int, action: Literal["grant", "deny"]
     ):
@@ -255,6 +255,87 @@ class SelectView(discord.ui.View):
 
     def set_message(self, msg: discord.InteractionMessage | discord.WebhookMessage):
         self._select.set_message(msg)
+
+
+def create_template_embed(data: Any) -> discord.Embed:
+    embed = discord.Embed(title="Telegram Template")
+    embed.add_field(name="ID", value=data["id"], inline=False)
+    embed.add_field(name="Telegram ID", value=f"```{data['tgid']}```", inline=True)
+    embed.add_field(name="Telegram Key", value=f"```{data['key']}```", inline=True)
+    embed.set_author(
+        name=data["nation"],
+        icon_url="https://www.nationstates.net/images/flags/Default.png",
+    )
+    embed.set_footer(
+        text="Telegram templates contain sensitive data. Do not share them."
+    )
+
+    return embed
+
+
+class CreateOrUpdateTemplateModal(Modal, title="create or modify a telegram template"):
+    def __init__(
+        self,
+        bot: Bot,
+        user: User,
+        method: Literal["POST", "PATCH"],
+        template_id: Optional[str] = None,
+    ):
+        super().__init__()
+
+        self.bot = bot
+        self.user = user
+        self.method = method
+        self.template_id = template_id
+
+    nation = discord.ui.TextInput(
+        label="nation", min_length=3, max_length=40, required=True
+    )
+
+    tgid = discord.ui.TextInput(
+        label="telegram id", min_length=8, max_length=20, required=True
+    )
+
+    secret_key = discord.ui.TextInput(
+        label="telegram key", min_length=8, max_length=20, required=True
+    )
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        nation = self.nation.value.lower().replace(" ", "_")
+        tgid = int(self.tgid.value)
+        secret_key = self.secret_key.value
+
+        headers = {"Authorization": f"Bearer {self.user.token}"}
+
+        data = {"nation": nation, "tgid": tgid, "key": secret_key}
+
+        async with self.bot.client.request(
+            method=self.method,
+            url=f"{self.bot.config.eurocore_url}/templates{f'/{self.template_id}' if self.template_id else ''}",
+            headers=headers,
+            json=data,
+        ) as response:
+            if response.status not in [200, 201]:
+                logger.error(
+                    "failed to create/modify template with status code: %d",
+                    response.status,
+                )
+                raise commands.CommandError("unable to create/update template")
+            else:
+                response_data = await response.json()
+
+                await interaction.response.send_message(
+                    embed=create_template_embed(response_data), ephemeral=True
+                )
+
+    async def on_error(
+        self, interaction: discord.Interaction, error: Exception
+    ) -> None:
+        logger.error(f"template creation/update error ({type(error)}): {error}")
+
+        await interaction.response.send_message(
+            f"template error: {error}", ephemeral=True
+        )
 
 
 class Eurocore(commands.Cog):
@@ -649,7 +730,7 @@ class Eurocore(commands.Cog):
 
             user_id = data["id"]
 
-            view = SelectView(self.bot, user, user_id, "grant")
+            view = SelectView(self.bot, user, user_id, action)
 
             if interaction.response.is_done():
                 message = await interaction.followup.send(
@@ -677,6 +758,65 @@ class Eurocore(commands.Cog):
     @perms_command_group.command(name="deny", description="deny permissions to a user")
     async def deny(self, interaction: discord.Interaction, username: str):
         await self.modify_permissions(interaction, username, "deny")
+
+    template_command_group = app_commands.Group(
+        name="template", description="manage eurocore telegram templates"
+    )
+
+    @template_command_group.command(
+        name="get", description="retrieve a eurocore telegram template"
+    )
+    async def get_template(self, interaction: discord.Interaction, template: str):
+        user = await self.get_user(interaction)
+
+        headers = {"Authorization": f"Bearer {user.token}"}
+
+        async with self.bot.client.request(
+            method="GET",
+            url=f"{self.bot.config.eurocore_url}/templates/{template}",
+            headers=headers,
+        ) as response:
+            if response.status != 200:
+                raise commands.CommandError(f"cannot find template with id: {template}")
+
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    embed=create_template_embed(await response.json()), ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    embed=create_template_embed(await response.json()), ephemeral=True
+                )
+
+    @template_command_group.command(
+        name="create", description="create a new eurocore telegram template"
+    )
+    async def create_template(self, interaction: discord.Interaction):
+        user = await self.get_user(interaction)
+
+        if interaction.response.is_done():
+            raise commands.UserInputError(
+                "Discord doesn't allow modal chaining, please rerun the command."
+            )
+
+        await interaction.response.send_modal(
+            CreateOrUpdateTemplateModal(self.bot, user, "POST")
+        )
+
+    @template_command_group.command(
+        name="update", description="update a eurocore telegram template"
+    )
+    async def update_template(self, interaction: discord.Interaction, template: str):
+        user = await self.get_user(interaction)
+
+        if interaction.response.is_done():
+            raise commands.UserInputError(
+                "Discord doesn't allow modal chaining, please rerun the command."
+            )
+
+        await interaction.response.send_modal(
+            CreateOrUpdateTemplateModal(self.bot, user, "PATCH", template_id=template)
+        )
 
 
 async def setup(bot: Bot):
