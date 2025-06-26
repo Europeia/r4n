@@ -259,6 +259,9 @@ class SelectView(View):
 
 def create_template_embed(data: Any) -> discord.Embed:
     embed = discord.Embed(title="Telegram Template")
+    embed.add_field(
+        name="Description", value=f"```{data['description']}```", inline=False
+    )
     embed.add_field(name="ID", value=data["id"], inline=False)
     embed.add_field(name="Telegram ID", value=f"```{data['tgid']}```", inline=True)
     embed.add_field(name="Telegram Key", value=f"```{data['key']}```", inline=True)
@@ -300,14 +303,24 @@ class CreateOrUpdateTemplateModal(Modal, title="create or modify a telegram temp
         label="telegram key", min_length=8, max_length=20, required=True
     )
 
+    description = discord.ui.TextInput(
+        label="description", min_length=10, max_length=100, required=True
+    )
+
     async def on_submit(self, interaction: Interaction) -> None:
         nation = self.nation.value.lower().replace(" ", "_")
         tgid = int(self.tgid.value)
         secret_key = self.secret_key.value
+        description = self.description.value
 
         headers = {"Authorization": f"Bearer {self.user.token}"}
 
-        data = {"nation": nation, "tgid": tgid, "key": secret_key}
+        data = {
+            "nation": nation,
+            "tgid": tgid,
+            "key": secret_key,
+            "description": description,
+        }
 
         async with self.bot.client.request(
             method=self.method,
