@@ -6,8 +6,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from discord import app_commands, Interaction
 from discord.ext import commands, tasks
-from discord.ui import Modal
-from typing import Optional, Dict
+from discord.ui import Modal, Select
+from typing import Optional, Dict, Literal
 
 from components.bot import Bot
 from components.user import User
@@ -180,6 +180,81 @@ class ChangeUserPasswordModal(Modal, title="[ADMIN] change a user's password"):
         await interaction.response.send_message(
             f"password reset error: {error}, please try again", ephemeral=True
         )
+
+
+class PermissionSelect(Select):
+    def __init__(
+        self, bot: Bot, user: User, user_id: int, action: Literal["grant", "deny"]
+    ):
+        self._bot = bot
+        self._user = user
+        self._user_id = user_id
+        self._action = action
+
+        options = [
+            discord.SelectOption(label="dispatches.create", value="dispatches.create"),
+            discord.SelectOption(label="dispatches.edit", value="dispatches.edit"),
+            discord.SelectOption(label="dispatches.delete", value="dispatches.delete"),
+            discord.SelectOption(label="rmbposts.create", value="rmbposts.create"),
+            discord.SelectOption(label="telegrams.read", value="telegrams.read"),
+            discord.SelectOption(label="telegrams.create", value="telegrams.create"),
+            discord.SelectOption(label="telegrams.delete", value="telegrams.delete"),
+            discord.SelectOption(label="templates.read", value="templates.read"),
+            discord.SelectOption(label="templates.create", value="templates.create"),
+            discord.SelectOption(label="templates.edit", value="templates.update"),
+        ]
+
+        super().__init__(
+            placeholder="permissions",
+            max_values=len(options),
+            min_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.disabled = True
+        await self._message.edit(view=None)
+
+        if self._action == "grant":
+            method = "POST"
+        else:
+            method = "DELETE"
+
+        headers = {"Authorization": f"Bearer {self._user.token}"}
+
+        async with self._bot.client.request(
+            method=method,
+            url=f"{self._bot.config.eurocore_url}/users/{self._user_id}/permissions",
+            headers=headers,
+            json={"permissions": self.values},
+        ) as response:
+            if response.status != 204:
+                raise commands.CommandError(
+                    f"unable to modify permissions for user with id: {self._user_id}"
+                )
+
+            await interaction.response.send_message(
+                content="permissions updated", ephemeral=True
+            )
+
+    def set_message(self, msg: discord.InteractionMessage | discord.WebhookMessage):
+        self._message = msg
+
+
+class SelectView(discord.ui.View):
+    def __init__(
+        self, bot: Bot, user: User, user_id: int, action: Literal["grant", "deny"]
+    ):
+        super().__init__()
+
+        self._select = PermissionSelect(bot, user, user_id, action)
+        self.add_item(self._select)
+
+    async def on_timeout(self) -> None:
+        return await super().on_timeout()
+
+    def set_message(self, msg: discord.InteractionMessage | discord.WebhookMessage):
+        self._select.set_message(msg)
 
 
 class Eurocore(commands.Cog):
@@ -547,6 +622,61 @@ class Eurocore(commands.Cog):
             )
 
         await interaction.response.send_modal(ChangeUserPasswordModal(self.bot, user))
+
+    perms_command_group = app_commands.Group(
+        name="permissions", description="grant or deny eurocore permissions"
+    )
+
+    async def modify_permissions(
+        self,
+        interaction: discord.Interaction,
+        username: str,
+        action: Literal["grant", "deny"],
+    ):
+        user = await self.get_user(interaction)
+
+        headers = {"Authorization": f"Bearer {user.token}"}
+
+        async with self.bot.client.request(
+            method="GET",
+            url=f"{self.bot.config.eurocore_url}/users/username/{username}",
+            headers=headers,
+        ) as response:
+            if response.status != 200:
+                raise commands.CommandError(f"unable to locate user: {username}")
+
+            data = await response.json(encoding="UTF-8")
+
+            user_id = data["id"]
+
+            view = SelectView(self.bot, user, user_id, "grant")
+
+            if interaction.response.is_done():
+                message = await interaction.followup.send(
+                    "please select permissions to grant/deny",
+                    view=view,
+                    ephemeral=True,
+                )
+            else:
+                await interaction.response.send_message(
+                    "please select permissions to grant/deny",
+                    view=view,
+                    ephemeral=True,
+                )
+
+                message = await interaction.original_response()
+
+            view.set_message(message)
+
+    @perms_command_group.command(
+        name="grant", description="grant permissions to a user"
+    )
+    async def grant(self, interaction: discord.Interaction, username: str):
+        await self.modify_permissions(interaction, username, "grant")
+
+    @perms_command_group.command(name="deny", description="deny permissions to a user")
+    async def deny(self, interaction: discord.Interaction, username: str):
+        await self.modify_permissions(interaction, username, "deny")
 
 
 async def setup(bot: Bot):
