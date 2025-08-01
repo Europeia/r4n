@@ -3,7 +3,7 @@ name: Generate requirements.txt
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   generate-requirements:
