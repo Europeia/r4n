@@ -7,5 +7,6 @@ dependencies = [
     "aiohttp>=3.11.11",
     "discord-py>=2.4.0",
     "logtail-python>=0.3.3",
+    "pre-commit>=4.2.0",
     "requests>=2.32.3",
 ]
