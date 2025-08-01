@@ -33,7 +33,9 @@ class UserList:
         self.users = {}
 
     def __repr__(self):
-        return f"UserList(users={' '.join([user.name for user in self.users.values()])})"
+        return (
+            f"UserList(users={' '.join([user.name for user in self.users.values()])})"
+        )
 
     def __iter__(self):
         return iter(self.users)
@@ -54,4 +56,3 @@ class UserList:
         self.users[discord_id] = user
 
         return self.users[discord_id]
-

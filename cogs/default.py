@@ -8,7 +8,7 @@ logger = logging.getLogger("r4n")
 
 def is_authorized():
     def predicate(ctx: commands.Context):
-        if not ctx.author.id in [230778695713947648, 110600636319440896]:
+        if ctx.author.id not in [230778695713947648, 110600636319440896]:
             raise commands.MissingPermissions(["Bot Administrator"])
 
         return True
