@@ -1,0 +1,26 @@
+name: Generate requirements.txt
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  generate-requirements:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Generate requirements.txt
+        run: uv pip compile pyproject.toml --output-file requirements.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: requirements.txt
+          path: requirements.txt
