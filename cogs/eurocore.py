@@ -201,7 +201,7 @@ class PermissionSelect(Select):
             discord.SelectOption(label="telegrams.delete", value="telegrams.delete"),
             discord.SelectOption(label="templates.read", value="templates.read"),
             discord.SelectOption(label="templates.create", value="templates.create"),
-            discord.SelectOption(label="templates.edit", value="templates.update"),
+            discord.SelectOption(label="templates.edit", value="templates.edit"),
         ]
 
         super().__init__(
