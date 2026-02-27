@@ -8,6 +8,7 @@ from discord.ext import commands
 from typing import Dict, Optional
 
 from components.config import Config
+from .exceptions import NotLoggedIn
 from components.jobs import Job, Dispatch, RMBPost
 from components.user import User, UserList
 
@@ -94,9 +95,7 @@ class Bot(commands.Bot):
 
     async def get_eurocore_user(self, interaction: discord.Interaction) -> User:
         if interaction.user.id not in self._users:
-            modal = LoginModal(self)
-            await interaction.response.send_modal(modal)
-            await modal.wait()
+            raise NotLoggedIn(interaction.user.id)
 
         user = self._users[interaction.user.id]
 

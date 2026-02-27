@@ -10,6 +10,7 @@ from discord.ui import Modal, Select, View
 from typing import Optional, Dict, Literal, Any
 
 from components.bot import Bot
+from components.exceptions import NotLoggedIn
 from components.user import User
 from components.jobs import Job, Dispatch, RMBPost
 
@@ -429,6 +430,78 @@ class AddDispatchModal(Modal):
         )
 
 
+class EditDispatchModal(Modal):
+    def __init__(self, user: User, bot: Bot):
+        self._user = user
+        self._bot = bot
+        super().__init__(title="Edit a Dispatch")
+
+    dispatch_id = discord.ui.Label(
+        text="Dispatch ID",
+        component=discord.ui.TextInput(
+            style=discord.TextStyle.short,
+        ),
+    )
+
+    dispatch_title = discord.ui.Label(
+        text="Title",
+        component=discord.ui.TextInput(
+            style=discord.TextStyle.short,
+        ),
+    )
+
+    dispatch_category = discord.ui.Label(
+        text="Category",
+        component=discord.ui.Select(
+            placeholder="Select a category",
+            options=[
+                discord.SelectOption(label="Bulletin: Policy", value="305"),
+                discord.SelectOption(label="Bulletin: News", value="315"),
+                discord.SelectOption(label="Bulletin: Opinion", value="325"),
+                discord.SelectOption(label="Bulletin: Campaign", value="385"),
+                discord.SelectOption(label="Meta: Gameplay", value="835"),
+                discord.SelectOption(label="Meta: Reference", value="845"),
+            ],
+        ),
+    )
+
+    dispatch_content = discord.ui.Label(
+        text="Content", component=discord.ui.FileUpload(max_values=1, required=True)
+    )
+
+    ping = discord.ui.Label(text="Ping on Completion", component=discord.ui.Checkbox())
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        assert isinstance(self.dispatch_id.component, discord.ui.TextInput)
+        assert isinstance(self.dispatch_title.component, discord.ui.TextInput)
+        assert isinstance(self.dispatch_category.component, discord.ui.Select)
+        assert isinstance(self.dispatch_content.component, discord.ui.FileUpload)
+        assert isinstance(self.ping.component, discord.ui.Checkbox)
+
+        dispatch_id = int(self.dispatch_id.component.value)
+        title: str = self.dispatch_title.component.value
+        category: str = self.dispatch_category.component.values[0]
+        file: discord.Attachment = self.dispatch_content.component.values[0]
+        ping: bool = self.ping.component.value
+
+        if not file.content_type or "text/plain" not in file.content_type:
+            raise commands.UserInputError("content_type must be text/plain")
+
+        text: str = (await file.read()).decode("UTF-8")
+
+        data = {
+            "title": title,
+            "nation": nation,
+            "category": int(category[:1]),
+            "subcategory": int(category),
+            "text": text,
+        }
+
+        await self._bot.publish_dispatch(
+            interaction, self._user, "PUT", f"/dispatches/{dispatch_id}", data, ping
+        )
+
+
 class Eurocore(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -534,73 +607,23 @@ class Eurocore(commands.Cog):
 
     @dispatch_command_group.command(name="add", description="post a dispatch")
     async def add_dispatch(self, interaction: discord.Interaction):
-        user = await self.bot.get_eurocore_user(interaction)
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         await interaction.response.send_modal(AddDispatchModal(user, self.bot))
 
     @dispatch_command_group.command(name="edit", description="edit a dispatch")
-    @app_commands.choices(
-        category=[
-            app_commands.Choice(name="Bulletin: Policy", value=305),
-            app_commands.Choice(name="Bulletin: News", value=315),
-            app_commands.Choice(name="Bulletin: Opinion", value=325),
-            app_commands.Choice(name="Bulletin: Campaign", value=385),
-            app_commands.Choice(name="Meta: Gameplay", value=835),
-            app_commands.Choice(name="Meta: Reference", value=845),
-        ]
-    )
-    @app_commands.describe(
-        dispatch_id="NS dispatch id",
-        title="dispatch title",
-        category="NS dispatch category",
-        content=".txt file containing the dispatch text",
-        ping="receive a ping when the job is completed",
-    )
-    @app_commands.rename(dispatch_id="id")
-    async def edit_dispatch(
-        self,
-        interaction: discord.Interaction,
-        dispatch_id: int,
-        title: str,
-        category: app_commands.Choice[int],
-        content: discord.Attachment,
-        ping: bool = False,
-    ):
-        if content.content_type and "text/plain" not in content.content_type:
-            # TODO: make this a custom error
-            raise commands.UserInputError("content_type must be text/plain")
+    async def edit_dispatch(self, interaction: discord.Interaction):
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
-        text = (await content.read()).decode("UTF-8")
-
-        data = {
-            "title": title,
-            "category": int(str(category.value)[:1]),
-            "subcategory": category.value,
-            "text": text,
-        }
-
-        await self.dispatch(
-            interaction,
-            method="PUT",
-            resource=f"/dispatches/{dispatch_id}",
-            data=data,
-            ping=ping,
-        )
-
-    @dispatch_command_group.command(name="delete", description="delete a dispatch")
-    @app_commands.describe(
-        dispatch_id="NS dispatch id", ping="receive a ping when the job is completed"
-    )
-    @app_commands.rename(dispatch_id="id")
-    async def delete_dispatch(
-        self, interaction: discord.Interaction, dispatch_id: int, ping: bool = False
-    ):
-        await self.dispatch(
-            interaction,
-            method="DELETE",
-            resource=f"/dispatches/{dispatch_id}",
-            ping=ping,
-        )
+        await interaction.response.send_modal(EditDispatchModal(user, self.bot))
 
     rmbpost_command_group = app_commands.Group(
         name="rmbpost", description="eurocore rmbpost commands"
