@@ -3,10 +3,12 @@ import discord
 import logging
 import sys
 
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from discord.ext import commands
+from typing import Dict, Optional
 
 from components.config import Config
+from components.jobs import Job, Dispatch, RMBPost
 from components.user import User, UserList
 
 logger = logging.getLogger("r4n")
@@ -32,6 +34,11 @@ class Bot(commands.Bot):
         """`UserList`"""
         return self._users
 
+    @property
+    def jobs(self):
+        """Eurocore jobs"""
+        return self._jobs
+
     def __init__(self, config: Config, client: aiohttp.ClientSession):
         intents = discord.Intents.default()
 
@@ -40,6 +47,7 @@ class Bot(commands.Bot):
         self._client = client
         self._config = config
         self._users = UserList()
+        self._jobs: Dict[str, Job] = {}
 
     async def on_ready(self):
         logger.info(f"logged in as {self.user}")
@@ -83,3 +91,65 @@ class Bot(commands.Bot):
             user.token = data["token"]
 
             user.last_login = datetime.now()
+
+    async def get_eurocore_user(self, interaction: discord.Interaction) -> User:
+        if interaction.user.id not in self._users:
+            modal = LoginModal(self)
+            await interaction.response.send_modal(modal)
+            await modal.wait()
+
+        user = self._users[interaction.user.id]
+
+        if datetime.now() - user.last_login > timedelta(hours=1):
+            await self.sign_in(user)
+
+        return user
+
+    async def publish_dispatch(
+        self,
+        interaction: discord.Interaction,
+        user: User,
+        method: str,
+        resource: str,
+        data: Optional[dict] = None,
+        ping: bool = False,
+    ):
+        headers = {"Authorization": f"Bearer {user.token}"}
+
+        async with self._client.request(
+            method,
+            url=f"{self._config.eurocore_url}{resource}",
+            headers=headers,
+            json=data,
+        ) as response:
+            data = await response.json(encoding="UTF-8")
+
+            if not data:
+                # TODO: make custom error
+                raise commands.CommandError("response is empty")
+
+            dispatch = Dispatch(
+                job_id=data["id"],
+                action=data["action"],
+                user=user,
+                location=response.headers["location"],
+                created_at=datetime.strptime(
+                    data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                ).replace(tzinfo=timezone.utc),
+                modified_at=datetime.strptime(
+                    data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                ).replace(tzinfo=timezone.utc),
+                status=data["status"],
+                error=data["error"],
+                ping_on_completion=ping,
+            )
+
+            if interaction.response.is_done():
+                message = await interaction.followup.send(embed=dispatch.embed())
+            else:
+                await interaction.response.send_message(embed=dispatch.embed())
+                message = await interaction.original_response()
+
+            dispatch.set_message(message)
+
+            self._jobs[dispatch.id] = dispatch

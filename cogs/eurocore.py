@@ -351,11 +351,87 @@ class CreateOrUpdateTemplateModal(Modal, title="create or modify a telegram temp
         )
 
 
+class AddDispatchModal(Modal):
+    def __init__(self, user: User, bot: Bot):
+        self._user = user
+        self._bot = bot
+        super().__init__(title="Create a New Dispatch")
+
+    dispatch_title = discord.ui.Label(
+        text="Title",
+        component=discord.ui.TextInput(
+            style=discord.TextStyle.short,
+        ),
+    )
+
+    dispatch_nation = discord.ui.Label(
+        text="Nation",
+        component=discord.ui.Select(
+            placeholder="Select a nation",
+            options=[
+                discord.SelectOption(label=val.replace("_", " ").title(), value=val)
+                for val in requests.head(f"{os.getenv('EUROCORE_URL')}/dispatches")
+                .headers["dispatch-nations"]
+                .split(",")
+            ],
+        ),
+    )
+
+    dispatch_category = discord.ui.Label(
+        text="Category",
+        component=discord.ui.Select(
+            placeholder="Select a category",
+            options=[
+                discord.SelectOption(label="Bulletin: Policy", value="305"),
+                discord.SelectOption(label="Bulletin: News", value="315"),
+                discord.SelectOption(label="Bulletin: Opinion", value="325"),
+                discord.SelectOption(label="Bulletin: Campaign", value="385"),
+                discord.SelectOption(label="Meta: Gameplay", value="835"),
+                discord.SelectOption(label="Meta: Reference", value="845"),
+            ],
+        ),
+    )
+
+    dispatch_content = discord.ui.Label(
+        text="Content", component=discord.ui.FileUpload(max_values=1, required=True)
+    )
+
+    ping = discord.ui.Label(text="Ping on Completion", component=discord.ui.Checkbox())
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        assert isinstance(self.dispatch_title.component, discord.ui.TextInput)
+        assert isinstance(self.dispatch_nation.component, discord.ui.Select)
+        assert isinstance(self.dispatch_category.component, discord.ui.Select)
+        assert isinstance(self.dispatch_content.component, discord.ui.FileUpload)
+        assert isinstance(self.ping.component, discord.ui.Checkbox)
+
+        title: str = self.dispatch_title.component.value
+        nation: str = self.dispatch_nation.component.values[0]
+        category: str = self.dispatch_category.component.values[0]
+        file: discord.Attachment = self.dispatch_content.component.values[0]
+        ping: bool = self.ping.component.value
+
+        if not file.content_type or "text/plain" not in file.content_type:
+            raise commands.UserInputError("content_type must be text/plain")
+
+        text: str = (await file.read()).decode("UTF-8")
+
+        data = {
+            "title": title,
+            "nation": nation,
+            "category": int(category[:1]),
+            "subcategory": int(category),
+            "text": text,
+        }
+
+        await self._bot.publish_dispatch(
+            interaction, self._user, "POST", "/dispatches", data, ping
+        )
+
+
 class Eurocore(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
-
-        self.jobs: Dict[str, Job] = {}
 
     async def cog_load(self):
         logger.info("loading eurocore, starting jobs task")
@@ -369,7 +445,7 @@ class Eurocore(commands.Cog):
     async def poll_jobs(self):
         logger.debug("polling jobs")
 
-        for job in self.jobs.values():
+        for job in self.bot.jobs.values():
             try:
                 await job.update(self.bot)
             except:  # noqa: E722
@@ -381,7 +457,7 @@ class Eurocore(commands.Cog):
 
         self.jobs = {
             message_id: job
-            for message_id, job in self.jobs.items()
+            for message_id, job in self.bot.jobs.items()
             if job.status == "queued"
         }
 
@@ -394,69 +470,6 @@ class Eurocore(commands.Cog):
         logger.error(f"polling jobs error: {error}")
 
         self.poll_jobs.restart()
-
-    async def get_user(self, interaction: discord.Interaction) -> User:
-        if interaction.user.id not in self.bot.user_list:
-            modal = LoginModal(self.bot)
-            await interaction.response.send_modal(modal)
-            await modal.wait()
-
-        user = self.bot.user_list[interaction.user.id]
-
-        if datetime.now() - user.last_login > timedelta(hours=1):
-            await self.bot.sign_in(user)
-
-        return user
-
-    async def dispatch(
-        self,
-        interaction: discord.Interaction,
-        method: str,
-        resource: str,
-        data: Optional[dict] = None,
-        ping: bool = False,
-    ):
-        user = await self.get_user(interaction)
-
-        headers = {"Authorization": f"Bearer {user.token}"}
-
-        async with self.bot.client.request(
-            method,
-            url=f"{self.bot.config.eurocore_url}{resource}",
-            headers=headers,
-            json=data,
-        ) as response:
-            data = await response.json(encoding="UTF-8")
-
-            if not data:
-                # TODO: make custom error
-                raise commands.CommandError("response is empty")
-
-            dispatch = Dispatch(
-                job_id=data["id"],
-                action=data["action"],
-                user=user,
-                location=response.headers["location"],
-                created_at=datetime.strptime(
-                    data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                ).replace(tzinfo=timezone.utc),
-                modified_at=datetime.strptime(
-                    data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                ).replace(tzinfo=timezone.utc),
-                status=data["status"],
-                error=data["error"],
-                ping_on_completion=ping,
-            )
-
-            if interaction.response.is_done():
-                message = await interaction.followup.send(embed=dispatch.embed())
-            else:
-                await interaction.response.send_message(embed=dispatch.embed())
-                message = await interaction.original_response()
-
-            dispatch.set_message(message)
-
-            self.jobs[dispatch.id] = dispatch
 
     async def rmbpost(
         self,
@@ -520,61 +533,10 @@ class Eurocore(commands.Cog):
     )
 
     @dispatch_command_group.command(name="add", description="post a dispatch")
-    @app_commands.choices(
-        nation=[
-            app_commands.Choice(name=val.replace("_", " ").title(), value=val)
-            for val in requests.head(f"{os.getenv('EUROCORE_URL')}/dispatches")
-            .headers["dispatch-nations"]
-            .split(",")
-        ]
-    )
-    @app_commands.choices(
-        category=[
-            app_commands.Choice(name="Bulletin: Policy", value=305),
-            app_commands.Choice(name="Bulletin: News", value=315),
-            app_commands.Choice(name="Bulletin: Opinion", value=325),
-            app_commands.Choice(name="Bulletin: Campaign", value=385),
-            app_commands.Choice(name="Meta: Gameplay", value=835),
-            app_commands.Choice(name="Meta: Reference", value=845),
-        ]
-    )
-    @app_commands.describe(
-        title="dispatch title",
-        nation="eurocore nation",
-        category="NS dispatch category",
-        content=".txt file containing the dispatch text",
-        ping="receive a ping when the job is completed",
-    )
-    async def add_dispatch(
-        self,
-        interaction: discord.Interaction,
-        title: str,
-        nation: app_commands.Choice[str],
-        category: app_commands.Choice[int],
-        content: discord.Attachment,
-        ping: bool = False,
-    ):
-        if content.content_type and "text/plain" not in content.content_type:
-            # TODO: make this a custom error
-            raise commands.UserInputError("content_type must be text/plain")
+    async def add_dispatch(self, interaction: discord.Interaction):
+        user = await self.bot.get_eurocore_user(interaction)
 
-        text = (await content.read()).decode("UTF-8")
-
-        data = {
-            "title": title,
-            "nation": nation.value,
-            "category": int(str(category.value)[:1]),
-            "subcategory": category.value,
-            "text": text,
-        }
-
-        await self.dispatch(
-            interaction,
-            method="POST",
-            resource="/dispatches",
-            data=data,
-            ping=ping,
-        )
+        await interaction.response.send_modal(AddDispatchModal(user, self.bot))
 
     @dispatch_command_group.command(name="edit", description="edit a dispatch")
     @app_commands.choices(
