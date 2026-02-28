@@ -156,3 +156,51 @@ class Bot(commands.Bot):
             dispatch.set_message(message)
 
             self._jobs[dispatch.id] = dispatch
+
+    async def publish_rmbpost(
+        self,
+        interaction: discord.Interaction,
+        user: User,
+        method: str,
+        resource: str,
+        data: Optional[dict] = None,
+        ping: bool = False,
+    ):
+        headers = {"Authorization": f"Bearer {user.token}"}
+
+        async with self._client.request(
+            method,
+            url=f"{self._config.eurocore_url}{resource}",
+            headers=headers,
+            json=data,
+        ) as response:
+            data = await response.json(encoding="UTF-8")
+
+            if not data:
+                # TODO: make custom error
+                raise commands.CommandError("response is empty")
+
+            rmbpost = RMBPost(
+                job_id=data["id"],
+                user=user,
+                location=response.headers["Location"],
+                created_at=datetime.strptime(
+                    data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                ).replace(tzinfo=timezone.utc),
+                modified_at=datetime.strptime(
+                    data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                ).replace(tzinfo=timezone.utc),
+                status=data["status"],
+                error=data["error"],
+                ping_on_completion=ping,
+            )
+
+            if interaction.response.is_done():
+                message = await interaction.followup.send(embed=rmbpost.embed())
+            else:
+                await interaction.response.send_message(embed=rmbpost.embed())
+                message = await interaction.original_response()
+
+            rmbpost.set_message(message)
+
+            self.jobs[rmbpost.id] = rmbpost

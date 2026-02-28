@@ -3,16 +3,14 @@ import logging
 import requests
 import os
 
-from datetime import datetime, timedelta, timezone
 from discord import app_commands, Interaction
 from discord.ext import commands, tasks
 from discord.ui import Modal, Select, View
-from typing import Optional, Dict, Literal, Any
+from typing import Optional, Literal, Any
 
 from components.bot import Bot
 from components.exceptions import NotLoggedIn
 from components.user import User
-from components.jobs import Job, Dispatch, RMBPost
 
 logger = logging.getLogger("r4n")
 
@@ -356,7 +354,7 @@ class AddDispatchModal(Modal):
     def __init__(self, user: User, bot: Bot):
         self._user = user
         self._bot = bot
-        super().__init__(title="Create a New Dispatch")
+        super().__init__(title="Publish a Dispatch")
 
     dispatch_title = discord.ui.Label(
         text="Title",
@@ -501,6 +499,62 @@ class EditDispatchModal(Modal):
         )
 
 
+class NewRMBPostModal(Modal):
+    def __init__(self, user: User, bot: Bot):
+        self._user = user
+        self._bot = bot
+        super().__init__(title="Publish an RMB Post")
+
+    nation = discord.ui.Label(
+        text="Nation",
+        component=discord.ui.Select(
+            placeholder="Select a nation",
+            options=[
+                discord.SelectOption(label=val.replace("_", " ").title(), value=val)
+                for val in requests.head(f"{os.getenv('EUROCORE_URL')}/dispatches")
+                .headers["rmbpost-nations"]
+                .split(",")
+            ],
+        ),
+    )
+
+    region = discord.ui.Label(text="Region", component=discord.ui.TextInput())
+
+    content = discord.ui.Label(
+        text="Content", component=discord.ui.FileUpload(max_values=1, required=True)
+    )
+
+    ping = discord.ui.Label(text="Ping on Completion", component=discord.ui.Checkbox())
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        assert isinstance(self.nation.component, discord.ui.Select)
+        assert isinstance(self.region.component, discord.ui.TextInput)
+        assert isinstance(self.content.component, discord.ui.FileUpload)
+        assert isinstance(self.ping.component, discord.ui.Checkbox)
+
+        nation: str = self.nation.component.values[0]
+        region: str = self.region.component.value
+        file: discord.Attachment = self.content.component.values[0]
+        ping: bool = self.ping.component.value
+
+        if file.content_type and "text/plain" not in file.content_type:
+            # TODO: make this a custom error
+            raise commands.UserInputError("content_type must be text/plain")
+
+        text = (await file.read()).decode("UTF-8")
+
+        data = {"nation": nation, "region": region, "text": text}
+
+        await self._bot.publish_rmbpost(
+            interaction,
+            self._user,
+            "POST",
+            "/rmbposts",
+            data,
+            ping,
+        )
+
+
 class Eurocore(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -543,55 +597,6 @@ class Eurocore(commands.Cog):
 
         self.poll_jobs.restart()
 
-    async def rmbpost(
-        self,
-        interaction: discord.Interaction,
-        method: str,
-        resource: str,
-        data: Optional[dict] = None,
-        ping: bool = False,
-    ):
-        user = await self.get_user(interaction)
-
-        headers = {"Authorization": f"Bearer {user.token}"}
-
-        async with self.bot.client.request(
-            method,
-            url=f"{self.bot.config.eurocore_url}{resource}",
-            headers=headers,
-            json=data,
-        ) as response:
-            data = await response.json(encoding="UTF-8")
-
-            if not data:
-                # TODO: make custom error
-                raise commands.CommandError("response is empty")
-
-            rmbpost = RMBPost(
-                job_id=data["id"],
-                user=user,
-                location=response.headers["Location"],
-                created_at=datetime.strptime(
-                    data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                ).replace(tzinfo=timezone.utc),
-                modified_at=datetime.strptime(
-                    data["modified_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                ).replace(tzinfo=timezone.utc),
-                status=data["status"],
-                error=data["error"],
-                ping_on_completion=ping,
-            )
-
-            if interaction.response.is_done():
-                message = await interaction.followup.send(embed=rmbpost.embed())
-            else:
-                await interaction.response.send_message(embed=rmbpost.embed())
-                message = await interaction.original_response()
-
-            rmbpost.set_message(message)
-
-            self.jobs[rmbpost.id] = rmbpost
-
     @app_commands.command(name="register", description="register for eurocore")
     async def register(self, interaction: discord.Interaction):
         await interaction.response.send_modal(RegistrationModal(self.bot))
@@ -629,43 +634,14 @@ class Eurocore(commands.Cog):
     )
 
     @rmbpost_command_group.command(name="add", description="post an RMB message")
-    @app_commands.choices(
-        nation=[
-            app_commands.Choice(name=val.replace("_", " ").title(), value=val)
-            for val in requests.head(f"{os.getenv('EUROCORE_URL')}/rmbposts")
-            .headers["rmbpost-nations"]
-            .split(",")
-        ]
-    )
-    @app_commands.describe(
-        nation="eurocore nation",
-        region="NS region to post in",
-        content=".txt file containing the RMB message",
-        ping="receive a ping when the job is completed",
-    )
-    async def post_rmbpost(
-        self,
-        interaction: discord.Interaction,
-        nation: app_commands.Choice[str],
-        region: str,
-        content: discord.Attachment,
-        ping: bool = False,
-    ):
-        if content.content_type and "text/plain" not in content.content_type:
-            # TODO: make this a custom error
-            raise commands.UserInputError("content_type must be text/plain")
+    async def add_rmbpost(self, interaction: discord.Interaction):
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
-        text = (await content.read()).decode("UTF-8")
-
-        data = {"nation": nation.value, "region": region, "text": text}
-
-        await self.rmbpost(
-            interaction,
-            method="POST",
-            resource="/rmbposts",
-            data=data,
-            ping=ping,
-        )
+        await interaction.response.send_modal(NewRMBPostModal(user, self.bot))
 
     user_command_group = app_commands.Group(
         name="user", description="eurocore user commands"
@@ -675,12 +651,11 @@ class Eurocore(commands.Cog):
         name="change_password", description="change your own password"
     )
     async def change_password(self, interaction: discord.Interaction):
-        user = await self.get_user(interaction)
-
-        if interaction.response.is_done():
-            raise commands.UserInputError(
-                "Discord doesn't allow modal chaining, please rerun the command."
-            )
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         await interaction.response.send_modal(ChangePasswordModal(self.bot, user))
 
@@ -692,12 +667,11 @@ class Eurocore(commands.Cog):
         name="change_password", description="change a user's password"
     )
     async def change_user_password(self, interaction: discord.Interaction):
-        user = await self.get_user(interaction)
-
-        if interaction.response.is_done():
-            raise commands.UserInputError(
-                "Discord doesn't allow modal chaining, please rerun the command."
-            )
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         await interaction.response.send_modal(ChangeUserPasswordModal(self.bot, user))
 
@@ -711,7 +685,11 @@ class Eurocore(commands.Cog):
         username: str,
         action: Literal["grant", "deny"],
     ):
-        user = await self.get_user(interaction)
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         headers = {"Authorization": f"Bearer {user.token}"}
 
@@ -764,7 +742,11 @@ class Eurocore(commands.Cog):
         name="get", description="retrieve a eurocore telegram template"
     )
     async def get_template(self, interaction: discord.Interaction, template: str):
-        user = await self.get_user(interaction)
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         headers = {"Authorization": f"Bearer {user.token}"}
 
@@ -789,12 +771,11 @@ class Eurocore(commands.Cog):
         name="create", description="create a new eurocore telegram template"
     )
     async def create_template(self, interaction: discord.Interaction):
-        user = await self.get_user(interaction)
-
-        if interaction.response.is_done():
-            raise commands.UserInputError(
-                "Discord doesn't allow modal chaining, please rerun the command."
-            )
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         await interaction.response.send_modal(
             CreateOrUpdateTemplateModal(self.bot, user, "POST")
@@ -804,12 +785,11 @@ class Eurocore(commands.Cog):
         name="update", description="update a eurocore telegram template"
     )
     async def update_template(self, interaction: discord.Interaction, template: str):
-        user = await self.get_user(interaction)
-
-        if interaction.response.is_done():
-            raise commands.UserInputError(
-                "Discord doesn't allow modal chaining, please rerun the command."
-            )
+        try:
+            user = await self.bot.get_eurocore_user(interaction)
+        except NotLoggedIn:
+            await interaction.response.send_modal(LoginModal(self.bot))
+            return
 
         await interaction.response.send_modal(
             CreateOrUpdateTemplateModal(self.bot, user, "PATCH", template_id=template)
