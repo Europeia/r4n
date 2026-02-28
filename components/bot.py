@@ -40,6 +40,10 @@ class Bot(commands.Bot):
         """Eurocore jobs"""
         return self._jobs
 
+    @jobs.setter
+    def jobs(self, value: Dict[str, Job]):
+        self._jobs = value
+
     def __init__(self, config: Config, client: aiohttp.ClientSession):
         intents = discord.Intents.default()
 

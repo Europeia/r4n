@@ -519,7 +519,7 @@ class Eurocore(commands.Cog):
 
         for job in self.bot.jobs.values():
             try:
-                await job.update(self.bot)
+                await job.update(self.bot.client, self.bot.config.eurocore_url)
             except:  # noqa: E722
                 logger.exception("unable to update job")
 
@@ -527,7 +527,7 @@ class Eurocore(commands.Cog):
                 if job.ping_on_completion:
                     await job.message.reply(f"<@!{job._user.id}>")
 
-        self.jobs = {
+        self.bot.jobs = {
             message_id: job
             for message_id, job in self.bot.jobs.items()
             if job.status == "queued"
