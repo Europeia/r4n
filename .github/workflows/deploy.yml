@@ -26,9 +26,3 @@ jobs:
         context: .
         push: true
         tags: ghcr.io/europeia/r4n:latest
-    - name: Push to DO
-      uses: digitalocean/app_action/deploy@v2
-      env:
-        SAMPLE_DIGEST: ${{ steps.push.outputs.digest }}
-      with:
-        token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}

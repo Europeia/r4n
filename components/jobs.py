@@ -1,10 +1,10 @@
+import aiohttp
 import re
 import discord
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from .user import User
-from .bot import Bot
 
 Action = Literal["add", "edit", "remove"]
 Status = Literal["queued", "success", "failure"]
@@ -46,7 +46,7 @@ class Job:
     def __repr__(self):
         return f"Job(id={self._id}, status={self._status})"
 
-    async def update(self, bot: Bot):
+    async def update(self, client: aiohttp.ClientSession, base_url: str):
         pass
 
     def embed(self) -> discord.Embed:
@@ -150,10 +150,8 @@ class Dispatch(Job):
 
         return embed
 
-    async def update(self, bot: Bot):
-        async with bot.client.get(
-            url=f"{bot.config.eurocore_url}{self._location}"
-        ) as response:
+    async def update(self, client: aiohttp.ClientSession, base_url: str):
+        async with client.get(url=f"{base_url}{self._location}") as response:
             data = await response.json(encoding="UTF-8")
 
             if data.get("error"):
@@ -231,10 +229,8 @@ class RMBPost(Job):
 
         return embed
 
-    async def update(self, bot: Bot):
-        async with bot.client.get(
-            url=f"{bot.config.eurocore_url}{self._location}"
-        ) as response:
+    async def update(self, client: aiohttp.ClientSession, base_url: str):
+        async with client.get(url=f"{base_url}{self._location}") as response:
             data = await response.json(encoding="UTF-8")
 
             if data.get("error"):

@@ -22,8 +22,8 @@ class Config:
     log: Log
 
     def __init__(self):
-        if not (user := os.getenv("USER")):
-            raise ValueError("USER environment variable not set")
+        if not (user := os.getenv("HOST_USER")):
+            raise ValueError("HOST_USER environment variable not set")
 
         if not (discord_token := os.getenv("DISCORD_TOKEN")):
             raise ValueError("DISCORD_TOKEN environment variable not set")
