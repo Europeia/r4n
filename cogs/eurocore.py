@@ -511,7 +511,7 @@ class NewRMBPostModal(Modal):
             placeholder="Select a nation",
             options=[
                 discord.SelectOption(label=val.replace("_", " ").title(), value=val)
-                for val in requests.head(f"{os.getenv('EUROCORE_URL')}/dispatches")
+                for val in requests.head(f"{os.getenv('EUROCORE_URL')}/rmbposts")
                 .headers["rmbpost-nations"]
                 .split(",")
             ],
