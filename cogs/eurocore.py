@@ -491,7 +491,6 @@ class EditDispatchModal(Modal):
 
         data = {
             "title": title,
-            "nation": nation,
             "category": int(category[:1]),
             "subcategory": int(category),
             "text": text,
